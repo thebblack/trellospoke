@@ -783,16 +783,16 @@ function JobsTab({ jobs, vocab, addrBook, onAdd, onUpdate, onDelete }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ROUTING TAB
 // ═══════════════════════════════════════════════════════════════════════════════
-function RoutingTab({ jobs, places, vocab, addrBook, onUpdateJob }) {
+function RoutingTab({ jobs, places, vocab, addrBook, onUpdateJob, initRoute, initStop }) {
   const [selJobs,    setSelJobs]    = useState(new Set());
   const [selPlaces,  setSelPlaces]  = useState([]); // array of {id, uid} — allows duplicates
   const [pinStartId, setPinStartId] = useState(null);
   const [pinFirstId, setPinFirstId] = useState(null);
   const [pinLastId,  setPinLastId]  = useState(null);
   const [pinEndId,   setPinEndId]   = useState(null);
-  const [route,      setRoute]      = useState(() => window.__savedRoute ?? []);
-  const [stop,       setStop]       = useState(() => window.__savedStop  ?? 0);
-  const [phase,      setPhase]      = useState(() => (window.__savedRoute?.length > 0) ? "run" : "select");
+  const [route,      setRoute]      = useState(() => initRoute ?? []);
+  const [stop,       setStop]       = useState(() => initStop  ?? 0);
+  const [phase,      setPhase]      = useState(() => (initRoute?.length > 0) ? "run" : "select");
   const [navModal,   setNavModal]   = useState(null);
   const [editModal,  setEditModal]  = useState(null);
 
@@ -1524,8 +1524,10 @@ function App() {
   const [places,   setPlaces]   = useState([]);
   const [vocab,    setVocab]    = useState({});
   const [addrBook, setAddrBook] = useState({});
-  const [tab,      setTab]      = useState(() => (window.__savedRoute?.length > 0) ? "routing" : "jobs");
+  const [tab,      setTab]      = useState("jobs");
   const [loaded,   setLoaded]   = useState(false);
+  const [initRoute, setInitRoute] = useState(null);
+  const [initStop,  setInitStop]  = useState(0);
 
   useEffect(() => {
     Promise.all([
@@ -1538,9 +1540,9 @@ function App() {
       if (v) setVocab(v);
       if (a) setAddrBook(a);
       if (r && r.length > 0) {
-        // Route tab will read these via its own state init — pass via a ref trick
-        window.__savedRoute = r;
-        window.__savedStop  = s ?? 0;
+        setInitRoute(r);
+        setInitStop(s ?? 0);
+        setTab("routing");
       }
       setLoaded(true);
     });
@@ -1603,7 +1605,7 @@ function App() {
               <MapPin size={15} color="#fff" />
             </div>
             <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: "-0.01em" }}>Survey Route Planner</span>
-            <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>v18</span>
+            <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>v19</span>
           </div>
           <nav style={{ display: "flex" }}>
             {TABS.map(({ id, label, Icon }) => (
@@ -1623,7 +1625,7 @@ function App() {
       <div style={{ maxWidth: 540, margin: "0 auto", padding: "16px 16px 70px" }}>
         {tab === "jobs"    && <JobsTab    jobs={jobs} vocab={vocab} addrBook={addrBook} onAdd={addJob} onUpdate={updateJob} onDelete={deleteJob} />}
         {tab === "places"  && <PlacesTab  places={places} onAdd={addPlace} onUpdate={updatePlace} onDelete={deletePlace} />}
-        {tab === "routing" && <RoutingTab jobs={jobs} places={places} vocab={vocab} addrBook={addrBook} onUpdateJob={updateJob} />}
+        {tab === "routing" && <RoutingTab jobs={jobs} places={places} vocab={vocab} addrBook={addrBook} onUpdateJob={updateJob} initRoute={initRoute} initStop={initStop} />}
         {tab === "sync"    && <SyncTab    jobs={jobs} places={places} vocab={vocab} addrBook={addrBook} onImport={importAll} onImportVocab={importVocab} onImportAddresses={importAddresses} onSaveVocab={saveVocab} />}
       </div>
     </div>
