@@ -141,12 +141,6 @@ function tsp(items, pinStartId, pinFirstId, pinLastId, pinEndId) {
   return result;
 }
 
-async function storeLoad(key) {
-  try { const r = await window.storage.get(key); return r ? JSON.parse(r.value) : null; } catch { return null; }
-}
-async function storeSave(key, val) {
-  try { await window.storage.set(key, JSON.stringify(val)); } catch { }
-}
 
 function mergeVocab(vocab, job) {
   const next = { ...vocab };
