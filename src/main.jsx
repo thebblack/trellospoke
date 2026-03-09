@@ -1509,7 +1509,7 @@ function SyncTab({ jobs, places, vocab, addrBook, onImport, onImportVocab, onImp
 const TABS = [
   { id: "jobs",    label: "Jobs",   Icon: MapPin },
   { id: "places",  label: "Places", Icon: Building2 },
-  { id: "routing", label: "Route",  Icon: Route },
+  { id: "routing", label: "Route",  Icon: Navigation },
   { id: "sync",    label: "Sync",   Icon: RotateCw },
 ];
 
