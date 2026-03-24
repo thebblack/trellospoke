@@ -4,6 +4,7 @@ import { MapPin, Plus, Trash2, Navigation, Check, ChevronRight, ChevronLeft, Rot
 
 const SUPABASE_URL = "https://kmfprxbfafbquilgchtv.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttZnByeGJmYWZicXVpbGdjaHR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3ODUxODYsImV4cCI6MjA4ODM2MTE4Nn0.09WBWLQMfo_rYhN9MO2fukbd-YLNZMghFf0dCdjs5Jc";
+const L = window.L;
 
 async function storeLoad(key) {
   try {
