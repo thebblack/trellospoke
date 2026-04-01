@@ -37,7 +37,7 @@ jobs:
       - name: Build dev branch
         run: |
           npm install
-          npm run build -- --base=/trellospoke/dev/
+          npx vite build --base=/trellospoke/dev/
           mkdir -p dist-main/dev
           cp -r dist/* dist-main/dev/
 
