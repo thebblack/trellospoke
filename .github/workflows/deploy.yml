@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
 
 permissions:
@@ -12,18 +12,38 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
-      - run: npm run build
+      - name: Build main branch
+        run: |
+          npm install
+          npm run build
+          mv dist dist-main
+
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          clean: false
+      - name: Build dev branch
+        run: |
+          npm install
+          npm run build -- --base=/trellospoke/dev/
+          mkdir -p dist-main/dev
+          cp -r dist/* dist-main/dev/
+
+      - name: Prepare final dist
+        run: mv dist-main dist
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
