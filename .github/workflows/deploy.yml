@@ -24,33 +24,32 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      
       - name: Build main branch
         run: |
           npm install
           npm run build
-          mv dist dist-main
+          mkdir -p /tmp/final
+          cp -r dist/* /tmp/final/
 
       - uses: actions/checkout@v4
         with:
           ref: dev
           clean: false
+      
       - name: Build dev branch
         run: |
           npm install
           npx vite build --base=/trellospoke/dev/
-          mkdir -p dist-main/dev
-          cp -r dist/* dist-main/dev/
-          rm -rf dist
+          mkdir -p /tmp/final/dev
+          cp -r dist/* /tmp/final/dev/
 
-      - name: Prepare final dist
-        run: |
-          mv dist-main dist
-          echo "=== Final dist contents ==="
-          find dist -type f
+      - name: Show contents
+        run: find /tmp/final -type f
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: /tmp/final
 
   deploy:
     needs: build
