@@ -1,4 +1,4 @@
-const CACHE = "srp-v2";
+const CACHE = "srp-v3";
 const BASE = "/trellospoke/";
 const ASSETS = [BASE, BASE + "index.html"];
 
@@ -17,6 +17,11 @@ self.addEventListener("activate", e => {
 });
 
 self.addEventListener("fetch", e => {
+  // Don't cache dev builds
+  if (e.request.url.includes('/dev/')) {
+    return;
+  }
+  
   e.respondWith(
     fetch(e.request)
       .then(res => {
