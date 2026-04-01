@@ -18,31 +18,40 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout main
+        uses: actions/checkout@v4
         with:
           ref: main
+          path: main-src
+
+      - name: Checkout dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          path: dev-src
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Build main branch
+
+      - name: Build main
+        working-directory: main-src
         run: |
           npm install
           npm run build
-          mv dist dist-main
 
-      - uses: actions/checkout@v4
-        with:
-          ref: dev
-          clean: false
-      - name: Build dev branch
+      - name: Build dev
+        working-directory: dev-src
         run: |
           npm install
-          npm run build -- --base=/trellospoke/dev/
-          mkdir -p dist-main/dev
-          cp -r dist/* dist-main/dev/
+          npx vite build --base=/trellospoke/dev/
 
-      - name: Prepare final dist
-        run: mv dist-main dist
+      - name: Combine builds
+        run: |
+          mkdir -p dist
+          cp -r main-src/dist/* dist/
+          mkdir -p dist/dev
+          cp -r dev-src/dist/* dist/dev/
 
       - uses: actions/upload-pages-artifact@v3
         with:
