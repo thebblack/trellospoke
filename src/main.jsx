@@ -49,30 +49,21 @@ const COMPLETION_FIELDS = [
 const VOCAB_FIELDS = ["surveyType", "company", "city", "diameter", "branchDiameter", "volume"];
 
 // ─── Coordinate parser ────────────────────────────────────────────────────────
-// Returns {lat, lng} as strings, or null if unrecognised
 function parseCoords(raw) {
   if (!raw || !raw.trim()) return null;
   const s = raw.trim();
 
-  // ── Short links — resolved by caller asynchronously ─────────────────────
   if (/goo\.gl\/maps|maps\.app\.goo\.gl/i.test(s)) return "shortlink";
 
-  // ── Google Maps URLs ──────────────────────────────────────────────────────
-  // https://maps.google.com/?q=51.5074,-0.1278
-  // https://www.google.com/maps?q=51.5074,-0.1278
-  // https://www.google.com/maps/@51.5074,-0.1278,15z
-  // https://maps.google.com/maps?ll=51.5074,-0.1278
   let m;
   m = s.match(/[?&@](?:q|ll)=(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/i);
   if (m) return fmt(m[1], m[2]);
   m = s.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
   if (m) return fmt(m[1], m[2]);
 
-  // ── Decimal degrees — "51.5074, -0.1278" or "51.5074 -0.1278" ────────────
   m = s.match(/^(-?\d{1,3}\.\d+)[,\s]+(-?\d{1,3}\.\d+)$/);
   if (m) return fmt(m[1], m[2]);
 
-  // ── DMS — 51°30'26.4"N 0°7'39.6"W  (various separators) ─────────────────
   const dms = /(\d{1,3})[°d]\s*(\d{1,2})['′m]\s*([\d.]+)["″s]?\s*([NS])[,\s]+(\d{1,3})[°d]\s*(\d{1,2})['′m]\s*([\d.]+)["″s]?\s*([EW])/i;
   m = s.match(dms);
   if (m) {
@@ -81,7 +72,6 @@ function parseCoords(raw) {
     return fmt(lat, lng);
   }
 
-  // ── DMS compact — 51 30 26.4 N, 0 7 39.6 W ───────────────────────────────
   const dms2 = /(\d{1,3})\s+(\d{1,2})\s+([\d.]+)\s*([NS])[,\s]+(\d{1,3})\s+(\d{1,2})\s+([\d.]+)\s*([EW])/i;
   m = s.match(dms2);
   if (m) {
@@ -248,18 +238,14 @@ function InputField({ label, value, onChange, placeholder = "" }) {
   );
 }
 
-// Resolve a Google Maps short link via CORS proxy → extract coords from final URL
 async function resolveShortLink(url) {
   try {
     const proxy = `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
     const res   = await fetch(proxy, { method: "GET", redirect: "follow" });
     const html  = await res.text();
-    // The redirected page HTML contains the canonical URL in several places
-    // Try to find coords in the response URL or embedded JSON
     const finalUrl = res.url ?? "";
     let coords = parseCoords(finalUrl);
     if (coords && coords !== "shortlink") return coords;
-    // Fallback: scan the HTML for coordinate patterns
     const m = html.match(/@(-?\d{1,3}\.\d{4,}),(-?\d{1,3}\.\d{4,})/);
     if (m) return fmt(m[1], m[2]);
     const m2 = html.match(/"(-?\d{1,3}\.\d{5,})",\s*"(-?\d{1,3}\.\d{5,})"/);
@@ -270,10 +256,9 @@ async function resolveShortLink(url) {
   }
 }
 
-// Single smart coordinate paste field
 function CoordField({ coords, onChange }) {
   const [raw,    setRaw]    = useState("");
-  const [status, setStatus] = useState(null); // null | "ok" | "err" | "shortlink" | "resolving"
+  const [status, setStatus] = useState(null);
 
   useEffect(() => {
     if (coords?.lat && coords?.lng && !raw) {
@@ -313,11 +298,11 @@ function CoordField({ coords, onChange }) {
         onChange={e => handle(e.target.value)}
         onFocus={async () => {
           setFocus(true);
-          if (raw) return; // already has content
+          if (raw) return;
           try {
             const text = await navigator.clipboard.readText();
             if (text?.trim()) handle(text.trim());
-          } catch { /* permission denied or unavailable — silent */ }
+          } catch { }
         }}
         onBlur={() => setFocus(false)}
         style={{
@@ -479,7 +464,6 @@ function Section({ label, children }) {
 }
 function Grid2({ children }) { return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>{children}</div>; }
 
-// ─── Nav Modal ────────────────────────────────────────────────────────────────
 // ─── Route Map (Leaflet) ──────────────────────────────────────────────────────
 function RouteMap({ stops }) {
   const mapRef = useRef(null);
@@ -536,7 +520,7 @@ function buildGoogleMapsUrl(stops) {
   if (waypoints.length === 1) return `https://www.google.com/maps/search/?api=1&query=${waypoints[0]}`;
   const origin = waypoints[0];
   const destination = waypoints[waypoints.length - 1];
-  const middle = waypoints.slice(1, -1).slice(0, 8); // max 8 waypoints in URL
+  const middle = waypoints.slice(1, -1).slice(0, 8);
   const allStops = [origin, ...middle, destination];
   return `https://www.google.com/maps/dir/${allStops.join("/")}`;
 }
@@ -671,7 +655,6 @@ function JobModal({ job, vocab, addrBook, onSave, onClose }) {
   const [coordSaved, setCoordSaved] = useState(false);
   const lookupTimer = useRef(null);
 
-  // Trigger lookup when city + street + number are all filled
   useEffect(() => {
     clearTimeout(lookupTimer.current);
     if (f.city && f.street && f.number) {
@@ -809,7 +792,6 @@ function JobCard({ ro, job, onEdit, onDelete, onAdvance }) {
     { label: "Volume",         value: job.volume,          unit: "m³" },
   ].filter(d => d.value);
 
-  // Determine next action based on current completion state
   const c = job.completion ?? {};
   const nextAction = !c.fieldWork  ? { key: "fieldWork",  label: "✓ Field Done"  }
                    : !c.officeWork ? { key: "officeWork", label: "✓ Office Done" }
@@ -818,7 +800,6 @@ function JobCard({ ro, job, onEdit, onDelete, onAdvance }) {
 
   return (
     <div style={{ position: "relative", borderRadius: 14, overflow: "hidden" }}>
-      {/* Delete revealed under swipe */}
       <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: THRESHOLD, background: C.red, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 14 }}>
         <Trash2 size={20} color="#fff" />
       </div>
@@ -931,7 +912,6 @@ function JobsTab({ ro, jobs, vocab, addrBook, onAdd, onUpdate, onDelete }) {
         {!ro && <Btn onClick={() => setModal("new")}><Plus size={14} /> New Job</Btn>}
       </div>
 
-      {/* Status filter tabs */}
       <div style={{ display: "flex", overflowX: "auto", gap: 6, paddingBottom: 2 }}>
         {STATUS_TABS.map(t => {
           const count = jobs.filter(t.filter).length;
@@ -981,7 +961,7 @@ function JobsTab({ ro, jobs, vocab, addrBook, onAdd, onUpdate, onDelete }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function RoutingTab({ ro, jobs, places, vocab, addrBook, onUpdateJob, initRoute, initStop }) {
   const [selJobs,    setSelJobs]    = useState(new Set());
-  const [selPlaces,  setSelPlaces]  = useState([]); // array of {id, uid} — allows duplicates
+  const [selPlaces,  setSelPlaces]  = useState([]);
   const [currLocCoords, setCurrLocCoords] = useState(null);
   const [currLocLoading, setCurrLocLoading] = useState(false);
   const CURR_LOC_ID = "__current_location__";
@@ -1018,7 +998,6 @@ function RoutingTab({ ro, jobs, places, vocab, addrBook, onUpdateJob, initRoute,
   const [navModal,   setNavModal]   = useState(null);
   const [editModal,  setEditModal]  = useState(null);
 
-  // Persist route and stop position
   useEffect(() => { storeSave("srp6-route", route); }, [route]);
   useEffect(() => { storeSave("srp6-stop",  stop);  }, [stop]);
 
@@ -1187,7 +1166,6 @@ function RoutingTab({ ro, jobs, places, vocab, addrBook, onUpdateJob, initRoute,
         <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>Pick places &amp; jobs · pin start/end · optimise</div>
       </div>
 
-      {/* Current Location entry */}
       <div style={{ background: C.surface, border: `1px solid ${selPlaces.some(e => e.id === CURR_LOC_ID) ? C.blue : C.border}`, borderRadius: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 13px" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -1252,7 +1230,6 @@ function RoutingTab({ ro, jobs, places, vocab, addrBook, onUpdateJob, initRoute,
                       style={{ width: 28, height: 28, borderRadius: 8, background: count > 0 ? C.blueLow : C.surfaceHigh, border: `1px solid ${count > 0 ? C.blue : C.border}`, color: count > 0 ? C.blue : C.muted, cursor: "pointer", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
                   </div>
                 </div>
-                {/* Pin buttons per instance */}
                 {instances.length > 0 && (
                   <div style={{ borderTop: `1px solid ${C.border}`, padding: "8px 13px", display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {instances.map(({ uid }, i) => {
@@ -1381,7 +1358,6 @@ const APP_VOCAB_FIELDS = [
   { key: "volume",         label: "Volume" },
 ];
 
-// Extract lat/lng from a GeoJSON feature geometry
 function coordsFromFeature(feature) {
   const geom = feature.geometry;
   if (!geom) return null;
@@ -1399,11 +1375,11 @@ function coordsFromFeature(feature) {
 }
 
 function GeoJSONImporter({ onImportVocab, onImportAddresses, onClose }) {
-  const [step,    setStep]    = useState("upload");  // upload | map | preview | done
-  const [fields,  setFields]  = useState([]);        // field names found in GeoJSON
-  const [mapping, setMapping] = useState({});        // { geoField: appVocabKey | "ignore" }
-  const [samples, setSamples] = useState({});        // { geoField: [val, val, ...] }
-  const [counts,  setCounts]  = useState({});        // { appVocabKey: n } after import
+  const [step,    setStep]    = useState("upload");
+  const [fields,  setFields]  = useState([]);
+  const [mapping, setMapping] = useState({});
+  const [samples, setSamples] = useState({});
+  const [counts,  setCounts]  = useState({});
   const [error,   setError]   = useState(null);
 
   const handleFile = e => {
@@ -1414,7 +1390,6 @@ function GeoJSONImporter({ onImportVocab, onImportAddresses, onClose }) {
       try {
         const geo = JSON.parse(ev.target.result);
         if (!geo.features?.length) throw new Error("No features found");
-        // Collect all property keys and sample values
         const allKeys = new Set();
         geo.features.forEach(f => Object.keys(f.properties ?? {}).forEach(k => allKeys.add(k)));
         const keyList = [...allKeys];
@@ -1425,7 +1400,6 @@ function GeoJSONImporter({ onImportVocab, onImportAddresses, onClose }) {
           )].slice(0, 5);
           sampleMap[k] = vals;
         });
-        // Auto-suggest mapping by fuzzy matching field names
         const autoMap = {};
         keyList.forEach(gk => {
           const lower = gk.toLowerCase().replace(/[^a-z]/g, "");
@@ -1449,16 +1423,12 @@ function GeoJSONImporter({ onImportVocab, onImportAddresses, onClose }) {
   };
 
   const doImport = () => {
-    // Build vocab additions: { appKey: Set of unique values }
     const additions = {};
     APP_VOCAB_FIELDS.forEach(af => { additions[af.key] = new Set(); });
     Object.entries(mapping).forEach(([geoKey, appKey]) => {
       if (appKey === "ignore" || !additions[appKey]) return;
       (samples[geoKey] ?? []).forEach(v => additions[appKey].add(v));
     });
-    // For full import we need all values, not just samples — re-read is not needed
-    // since we stored all unique values in samples already (up to 5 shown, but we need all)
-    // We'll pass the full mapping and let parent handle it with the file
     const countMap = {};
     Object.entries(additions).forEach(([k, s]) => { countMap[k] = s.size; });
     onImportVocab(Object.fromEntries(
@@ -1476,7 +1446,6 @@ function GeoJSONImporter({ onImportVocab, onImportAddresses, onClose }) {
           <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><X size={18} /></button>
         </div>
 
-        {/* STEP: upload */}
         {step === "upload" && (
           <>
             <p style={{ color: C.muted, fontSize: 13, margin: 0, lineHeight: 1.6 }}>
@@ -1492,7 +1461,6 @@ function GeoJSONImporter({ onImportVocab, onImportAddresses, onClose }) {
           </>
         )}
 
-        {/* STEP: map fields */}
         {step === "map" && (
           <>
             <p style={{ color: C.muted, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
@@ -1526,7 +1494,6 @@ function GeoJSONImporter({ onImportVocab, onImportAddresses, onClose }) {
           </>
         )}
 
-        {/* STEP: done */}
         {step === "done" && (
           <>
             <div style={{ textAlign: "center", padding: "16px 0" }}>
@@ -1548,6 +1515,7 @@ function GeoJSONImporter({ onImportVocab, onImportAddresses, onClose }) {
     </div>
   );
 }
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // VOCAB EDITOR
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1563,13 +1531,11 @@ function VocabEditor({ vocab, onSave, onClose }) {
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 50, display: "flex", alignItems: "flex-end", justifyContent: "center", padding: 12 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 20, width: "100%", maxWidth: 500, maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px 12px" }}>
           <span style={{ color: C.text, fontWeight: 800, fontSize: 16 }}>Vocabulary Editor</span>
           <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><X size={18} /></button>
         </div>
 
-        {/* Field tabs — scrollable */}
         <div style={{ display: "flex", overflowX: "auto", borderBottom: `1px solid ${C.border}`, paddingLeft: 12 }}>
           {APP_VOCAB_FIELDS.map(f => (
             <button key={f.key} onClick={() => setTab(f.key)} style={{
@@ -1580,7 +1546,6 @@ function VocabEditor({ vocab, onSave, onClose }) {
           ))}
         </div>
 
-        {/* Editor area */}
         <div style={{ flex: 1, overflowY: "auto", padding: "12px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ fontSize: 11, color: C.muted }}>One value per line · {lineCount} entries</div>
           <textarea
@@ -1596,7 +1561,6 @@ function VocabEditor({ vocab, onSave, onClose }) {
           />
         </div>
 
-        {/* Save */}
         <div style={{ padding: "12px 20px", borderTop: `1px solid ${C.border}` }}>
           <Btn onClick={() => {
             const updated = {};
@@ -1615,7 +1579,7 @@ function VocabEditor({ vocab, onSave, onClose }) {
 function SyncTab({ ro, jobs, places, vocab, addrBook, onImport, onImportVocab, onImportAddresses, onSaveVocab }) {
   const [importText, setImportText]   = useState("");
   const [exportDone, setExportDone]   = useState(false);
-  const [importState, setImportState] = useState(null); // null | "ok" | "err"
+  const [importState, setImportState] = useState(null);
   const [importFocus, setImportFocus] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [geoOpen,     setGeoOpen]     = useState(false);
@@ -1631,7 +1595,6 @@ function SyncTab({ ro, jobs, places, vocab, addrBook, onImport, onImportVocab, o
       setExportDone(true);
       setTimeout(() => setExportDone(false), 3000);
     } catch {
-      // fallback: select the text from a temp textarea
       const ta = document.createElement("textarea");
       ta.value = payload;
       document.body.appendChild(ta);
@@ -1680,7 +1643,6 @@ function SyncTab({ ro, jobs, places, vocab, addrBook, onImport, onImportVocab, o
         <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>Export your data as a code · share via WhatsApp · import on another phone</div>
       </div>
 
-      {/* Current state summary */}
       <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "14px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {[
           { label: "Jobs",          value: stats.jobs },
@@ -1695,7 +1657,6 @@ function SyncTab({ ro, jobs, places, vocab, addrBook, onImport, onImportVocab, o
         ))}
       </div>
 
-      {/* Export */}
       <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "16px" , display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ fontSize: 10, color: C.accent, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em" }}>Export</div>
         <p style={{ color: C.muted, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
@@ -1706,7 +1667,6 @@ function SyncTab({ ro, jobs, places, vocab, addrBook, onImport, onImportVocab, o
         </Btn>
       </div>
 
-      {/* Import */}
       {!ro && <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "16px", display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ fontSize: 10, color: C.accent, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em" }}>Import</div>
         <p style={{ color: C.muted, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
@@ -1740,7 +1700,6 @@ function SyncTab({ ro, jobs, places, vocab, addrBook, onImport, onImportVocab, o
         </Btn>
       </div>}
 
-      {/* Confirm dialog */}
       {confirmOpen && (
         <div onClick={() => setConfirmOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: C.surface, border: `1px solid ${C.red}66`, borderRadius: 20, width: "100%", maxWidth: 360, padding: 24, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -1756,7 +1715,6 @@ function SyncTab({ ro, jobs, places, vocab, addrBook, onImport, onImportVocab, o
         </div>
       )}
 
-      {/* QGIS import */}
       {!ro && <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "16px", display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ fontSize: 10, color: C.accent, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em" }}>Import from QGIS</div>
         <p style={{ color: C.muted, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
@@ -1773,7 +1731,6 @@ function SyncTab({ ro, jobs, places, vocab, addrBook, onImport, onImportVocab, o
         />
       )}
 
-      {/* Vocab editor */}
       {!ro && <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "16px", display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ fontSize: 10, color: C.accent, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em" }}>Vocabulary</div>
         <p style={{ color: C.muted, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
@@ -1788,6 +1745,7 @@ function SyncTab({ ro, jobs, places, vocab, addrBook, onImport, onImportVocab, o
     </div>
   );
 }
+
 const TABS = [
   { id: "jobs",    label: "Jobs",   Icon: MapPin },
   { id: "places",  label: "Places", Icon: Building2 },
@@ -1796,6 +1754,7 @@ const TABS = [
 ];
 
 export default function App() {
+  // ═══ ALL STATE HOOKS ═══
   const [jobs,     setJobs]     = useState([]);
   const [places,   setPlaces]   = useState([]);
   const [vocab,    setVocab]    = useState({});
@@ -1804,66 +1763,14 @@ export default function App() {
   const [loaded,   setLoaded]   = useState(false);
   const [initRoute, setInitRoute] = useState(null);
   const [initStop,  setInitStop]  = useState(0);
-  const [access,    setAccess]    = useState(() => sessionStorage.getItem("srp-access") ?? "pending"); // pending | rw | ro
+  const [access,    setAccess]    = useState(() => sessionStorage.getItem("srp-access") ?? "pending");
   const [pinInput,  setPinInput]  = useState("");
   const [pinError,  setPinError]  = useState(false);
   const PIN = "0751";
 
-  const submitPin = () => {
-    if (pinInput === PIN) {
-      sessionStorage.setItem("srp-access", "rw");
-      setAccess("rw");
-    } else {
-      setPinError(true);
-      setPinInput("");
-      setTimeout(() => setPinError(false), 1500);
-    }
-  };
-
-  const skipPin = () => {
-    sessionStorage.setItem("srp-access", "ro");
-    setAccess("ro");
-  };
-
-  const ro = access === "ro"; // read-only flag passed down
-
-  if (access === "pending") {
-    return (
-      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
-        <div style={{ width: "100%", maxWidth: 320, display: "flex", flexDirection: "column", gap: 20, alignItems: "center" }}>
-          <div style={{ width: 56, height: 56, background: C.accent, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <MapPin size={28} color="#fff" />
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ color: C.text, fontWeight: 800, fontSize: 22 }}>Survey Route Planner</div>
-            <div style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>Enter PIN for full access</div>
-          </div>
-          <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
-            <input
-              type="password" inputMode="numeric" maxLength={8}
-              value={pinInput} onChange={e => setPinInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && submitPin()}
-              placeholder="PIN"
-              style={{
-                width: "100%", boxSizing: "border-box", background: C.surface,
-                border: `2px solid ${pinError ? C.red : C.border}`, borderRadius: 12,
-                padding: "14px 16px", color: C.text, fontSize: 20, textAlign: "center",
-                outline: "none", letterSpacing: "0.3em", transition: "border-color .2s",
-              }}
-              autoFocus
-            />
-            {pinError && <div style={{ textAlign: "center", color: C.red, fontSize: 12, fontWeight: 700 }}>Wrong PIN</div>}
-            <Btn onClick={submitPin} full>Unlock</Btn>
-            <button onClick={skipPin} style={{ background: "none", border: "none", color: C.muted, fontSize: 12, cursor: "pointer", textDecoration: "underline", padding: 4 }}>
-              Continue as read-only
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // ═══ ALL EFFECTS — MUST BE BEFORE ANY RETURN ═══
   useEffect(() => {
+    if (access === "pending") return; // Don't load data until logged in
     Promise.all([
       storeLoad("srp6-jobs"), storeLoad("srp6-places"),
       storeLoad("srp6-vocab"), storeLoad("srp6-addr"),
@@ -1880,13 +1787,14 @@ export default function App() {
       }
       setLoaded(true);
     });
-  }, []);
+  }, [access]);
 
   useEffect(() => { if (loaded) storeSave("srp6-jobs",   jobs);     }, [jobs,     loaded]);
   useEffect(() => { if (loaded) storeSave("srp6-places", places);   }, [places,   loaded]);
   useEffect(() => { if (loaded) storeSave("srp6-vocab",  vocab);    }, [vocab,    loaded]);
   useEffect(() => { if (loaded) storeSave("srp6-addr",   addrBook); }, [addrBook, loaded]);
 
+  // ═══ ALL CALLBACKS — MUST BE BEFORE ANY RETURN ═══
   const addJob = useCallback(job => {
     setJobs(p => [...p, job]);
     setVocab(v => mergeVocab(v, job));
@@ -1930,6 +1838,62 @@ export default function App() {
     setVocab(updated);
   }, []);
 
+  // ═══ REGULAR FUNCTIONS (not hooks) ═══
+  const submitPin = () => {
+    if (pinInput === PIN) {
+      sessionStorage.setItem("srp-access", "rw");
+      setAccess("rw");
+    } else {
+      setPinError(true);
+      setPinInput("");
+      setTimeout(() => setPinError(false), 1500);
+    }
+  };
+
+  const skipPin = () => {
+    sessionStorage.setItem("srp-access", "ro");
+    setAccess("ro");
+  };
+
+  const ro = access === "ro";
+
+  // ═══ EARLY RETURNS — AFTER ALL HOOKS ═══
+  if (access === "pending") {
+    return (
+      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
+        <div style={{ width: "100%", maxWidth: 320, display: "flex", flexDirection: "column", gap: 20, alignItems: "center" }}>
+          <div style={{ width: 56, height: 56, background: C.accent, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <MapPin size={28} color="#fff" />
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ color: C.text, fontWeight: 800, fontSize: 22 }}>Survey Route Planner</div>
+            <div style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>Enter PIN for full access</div>
+          </div>
+          <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
+            <input
+              type="password" inputMode="numeric" maxLength={8}
+              value={pinInput} onChange={e => setPinInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && submitPin()}
+              placeholder="PIN"
+              style={{
+                width: "100%", boxSizing: "border-box", background: C.surface,
+                border: `2px solid ${pinError ? C.red : C.border}`, borderRadius: 12,
+                padding: "14px 16px", color: C.text, fontSize: 20, textAlign: "center",
+                outline: "none", letterSpacing: "0.3em", transition: "border-color .2s",
+              }}
+              autoFocus
+            />
+            {pinError && <div style={{ textAlign: "center", color: C.red, fontSize: 12, fontWeight: 700 }}>Wrong PIN</div>}
+            <Btn onClick={submitPin} full>Unlock</Btn>
+            <button onClick={skipPin} style={{ background: "none", border: "none", color: C.muted, fontSize: 12, cursor: "pointer", textDecoration: "underline", padding: 4 }}>
+              Continue as read-only
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!loaded) {
     return (
       <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
@@ -1942,6 +1906,7 @@ export default function App() {
     );
   }
 
+  // ═══ MAIN RENDER ═══
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'DM Sans','Segoe UI',sans-serif", color: C.text }}>
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 20 }}>
@@ -1951,7 +1916,7 @@ export default function App() {
               <MapPin size={15} color="#fff" />
             </div>
             <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: "-0.01em" }}>Survey Route Planner</span>
-            <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>v31</span>
+            <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>v32</span>
             {ro && <span onClick={() => { sessionStorage.removeItem("srp-access"); setAccess("pending"); setPinInput(""); }} style={{ fontSize: 10, color: C.accent, fontWeight: 700, cursor: "pointer", padding: "2px 7px", border: `1px solid ${C.accent}44`, borderRadius: 6 }}>🔒 RO</span>}
           </div>
           <nav style={{ display: "flex" }}>
