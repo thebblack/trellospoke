@@ -1916,7 +1916,7 @@ export default function App() {
               <MapPin size={15} color="#fff" />
             </div>
             <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: "-0.01em" }}>Survey Route Planner</span>
-            <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>v32</span>
+            <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>v32.5</span>
             {ro && <span onClick={() => { sessionStorage.removeItem("srp-access"); setAccess("pending"); setPinInput(""); }} style={{ fontSize: 10, color: C.accent, fontWeight: 700, cursor: "pointer", padding: "2px 7px", border: `1px solid ${C.accent}44`, borderRadius: 6 }}>🔒 RO</span>}
           </div>
           <nav style={{ display: "flex" }}>
