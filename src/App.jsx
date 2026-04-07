@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { MapPin } from "lucide-react";
 import { C, TABS } from "./constants.js";
-import { storeLoad, storeSave } from "./storage.js";
+import { storeLoad, storeSave, signIn, signOut, isSignedIn, getAccessMode } from "./storage.js";
 import { mergeVocab, mergeAddress } from "./utils.js";
 import { Btn } from "./components/ui.jsx";
 import { JobsTab } from "./tabs/JobsTab.jsx";
@@ -19,14 +19,15 @@ export default function App() {
   const [loaded,   setLoaded]   = useState(false);
   const [initRoute, setInitRoute] = useState(null);
   const [initStop,  setInitStop]  = useState(0);
-  const [access,    setAccess]    = useState(() => sessionStorage.getItem("srp-access") ?? "pending");
-  const [pinInput,  setPinInput]  = useState("");
-  const [pinError,  setPinError]  = useState(false);
-  const PIN = "0751";
+  const [access,    setAccess]    = useState(() => getAccessMode());
+  const [email,     setEmail]     = useState("");
+  const [password,  setPassword]  = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authBusy,  setAuthBusy]  = useState(false);
 
   // ═══ ALL EFFECTS — MUST BE BEFORE ANY RETURN ═══
   useEffect(() => {
-    if (access === "pending") return; // Don't load data until logged in
+    if (access === "pending") return;
     Promise.all([
       storeLoad("srp6-jobs"), storeLoad("srp6-places"),
       storeLoad("srp6-vocab"), storeLoad("srp6-addr"),
@@ -94,21 +95,26 @@ export default function App() {
     setVocab(updated);
   }, []);
 
-  // ═══ REGULAR FUNCTIONS (not hooks) ═══
-  const submitPin = () => {
-    if (pinInput === PIN) {
-      sessionStorage.setItem("srp-access", "rw");
-      setAccess("rw");
-    } else {
-      setPinError(true);
-      setPinInput("");
-      setTimeout(() => setPinError(false), 1500);
+  // ═══ AUTH FUNCTIONS ═══
+  const handleSignIn = async () => {
+    setAuthError("");
+    setAuthBusy(true);
+    try {
+      await signIn(email, password);
+      setAccess(getAccessMode());
+    } catch (e) {
+      setAuthError(e.message);
+    } finally {
+      setAuthBusy(false);
     }
   };
 
-  const skipPin = () => {
-    sessionStorage.setItem("srp-access", "ro");
-    setAccess("ro");
+  const handleSignOut = () => {
+    signOut();
+    setAccess("pending");
+    setEmail("");
+    setPassword("");
+    setLoaded(false);
   };
 
   const ro = access === "ro";
@@ -123,27 +129,37 @@ export default function App() {
           </div>
           <div style={{ textAlign: "center" }}>
             <div style={{ color: C.text, fontWeight: 800, fontSize: 22 }}>Survey Route Planner</div>
-            <div style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>Enter PIN for full access</div>
+            <div style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>Sign in to continue</div>
           </div>
           <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
             <input
-              type="password" inputMode="numeric" maxLength={8}
-              value={pinInput} onChange={e => setPinInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && submitPin()}
-              placeholder="PIN"
+              type="email"
+              value={email} onChange={e => setEmail(e.target.value)}
+              placeholder="Email"
               style={{
                 width: "100%", boxSizing: "border-box", background: C.surface,
-                border: `2px solid ${pinError ? C.red : C.border}`, borderRadius: 12,
-                padding: "14px 16px", color: C.text, fontSize: 20, textAlign: "center",
-                outline: "none", letterSpacing: "0.3em", transition: "border-color .2s",
+                border: `2px solid ${authError ? C.red : C.border}`, borderRadius: 12,
+                padding: "12px 16px", color: C.text, fontSize: 14,
+                outline: "none", transition: "border-color .2s",
               }}
               autoFocus
             />
-            {pinError && <div style={{ textAlign: "center", color: C.red, fontSize: 12, fontWeight: 700 }}>Wrong PIN</div>}
-            <Btn onClick={submitPin} full>Unlock</Btn>
-            <button onClick={skipPin} style={{ background: "none", border: "none", color: C.muted, fontSize: 12, cursor: "pointer", textDecoration: "underline", padding: 4 }}>
-              Continue as read-only
-            </button>
+            <input
+              type="password"
+              value={password} onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSignIn()}
+              placeholder="Password"
+              style={{
+                width: "100%", boxSizing: "border-box", background: C.surface,
+                border: `2px solid ${authError ? C.red : C.border}`, borderRadius: 12,
+                padding: "12px 16px", color: C.text, fontSize: 14,
+                outline: "none", transition: "border-color .2s",
+              }}
+            />
+            {authError && <div style={{ textAlign: "center", color: C.red, fontSize: 12, fontWeight: 700 }}>{authError}</div>}
+            <Btn onClick={handleSignIn} full disabled={authBusy}>
+              {authBusy ? "Signing in…" : "Sign In"}
+            </Btn>
           </div>
         </div>
       </div>
@@ -172,8 +188,10 @@ export default function App() {
               <MapPin size={15} color="#fff" />
             </div>
             <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: "-0.01em" }}>Survey Route Planner</span>
-            <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>v33</span>
-            {ro && <span onClick={() => { sessionStorage.removeItem("srp-access"); setAccess("pending"); setPinInput(""); }} style={{ fontSize: 10, color: C.accent, fontWeight: 700, cursor: "pointer", padding: "2px 7px", border: `1px solid ${C.accent}44`, borderRadius: 6 }}>🔒 RO</span>}
+            <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>v34</span>
+            <span onClick={handleSignOut} style={{ fontSize: 10, color: ro ? C.accent : C.green, fontWeight: 700, cursor: "pointer", padding: "2px 7px", border: `1px solid ${ro ? C.accent : C.green}44`, borderRadius: 6 }}>
+              {ro ? "🔒 RO" : "✏️ RW"}
+            </span>
           </div>
           <nav style={{ display: "flex" }}>
             {TABS.map(({ id, label, Icon }) => (
