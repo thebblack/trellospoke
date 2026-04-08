@@ -214,9 +214,43 @@ export function SyncTab({ ro, jobs, places, vocab, addrBook, onImport, onImportV
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [geoOpen,     setGeoOpen]     = useState(false);
   const [vocabOpen,   setVocabOpen]   = useState(false);
+  const [dlBusy,      setDlBusy]      = useState(false);
 
   const encode = data => btoa(unescape(encodeURIComponent(JSON.stringify(data))));
   const decode = str  => JSON.parse(decodeURIComponent(escape(atob(str.trim()))));
+
+  const downloadArchive = async () => {
+    setDlBusy(true);
+    try {
+      const { getSbHeaders, SB_URL } = await import("../storage.js");
+      const headers = getSbHeaders();
+      let all = [], offset = 0;
+      while (true) {
+        const resp = await fetch(
+          `${SB_URL}/rest/v1/jobs_archive?select=*&order=year.desc,month.desc&limit=1000&offset=${offset}`,
+          { headers }
+        );
+        const rows = await resp.json();
+        all.push(...rows);
+        if (rows.length < 1000) break;
+        offset += 1000;
+      }
+      const cols = ["year","month","day","path","company","address","fee","invoice","paid"];
+      const esc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+      const csv = [cols.join(","), ...all.map(r => cols.map(c => esc(r[c])).join(","))].join("\n");
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `jobs_archive_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("Download failed: " + e.message);
+    } finally {
+      setDlBusy(false);
+    }
+  };
 
   const handleExport = async () => {
     const payload = encode({ jobs, places, vocab, addrBook, exportedAt: new Date().toISOString() });
@@ -294,6 +328,16 @@ export function SyncTab({ ro, jobs, places, vocab, addrBook, onImport, onImportV
         </p>
         <Btn onClick={handleExport} variant={exportDone ? "green" : "primary"} full>
           {exportDone ? <><Check size={14} /> Copied to clipboard!</> : <>📤 Export &amp; Copy Code</>}
+        </Btn>
+      </div>
+
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "16px", display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ fontSize: 10, color: C.accent, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em" }}>Jobs Archive</div>
+        <p style={{ color: C.muted, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+          Download the full jobs archive as a CSV file. Open it in Google Sheets for sorting, filtering and totals.
+        </p>
+        <Btn onClick={downloadArchive} disabled={dlBusy} variant="secondary" full>
+          {dlBusy ? "Downloading…" : "📊 Download Archive CSV"}
         </Btn>
       </div>
 
