@@ -8,6 +8,7 @@ import { JobsTab } from "./tabs/JobsTab.jsx";
 import { PlacesTab } from "./tabs/PlacesTab.jsx";
 import { RoutingTab } from "./tabs/RoutingTab.jsx";
 import { SyncTab } from "./tabs/SyncTab.jsx";
+import { ArchiveTab } from "./tabs/ArchiveTab.jsx";
 
 export default function App() {
   // ═══ ALL STATE HOOKS ═══
@@ -188,7 +189,7 @@ export default function App() {
               <MapPin size={15} color="#fff" />
             </div>
             <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: "-0.01em" }}>Survey Route Planner</span>
-            <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>v34</span>
+            <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>v35</span>
             <span onClick={handleSignOut} style={{ fontSize: 10, color: ro ? C.accent : C.green, fontWeight: 700, cursor: "pointer", padding: "2px 7px", border: `1px solid ${ro ? C.accent : C.green}44`, borderRadius: 6 }}>
               {ro ? "🔒 RO" : "✏️ RW"}
             </span>
@@ -212,6 +213,7 @@ export default function App() {
         {tab === "jobs"    && <JobsTab    ro={ro} jobs={jobs} vocab={vocab} addrBook={addrBook} onAdd={addJob} onUpdate={updateJob} onDelete={deleteJob} />}
         {tab === "places"  && <PlacesTab  ro={ro} places={places} onAdd={addPlace} onUpdate={updatePlace} onDelete={deletePlace} />}
         {tab === "routing" && <RoutingTab ro={ro} jobs={jobs} places={places} vocab={vocab} addrBook={addrBook} onUpdateJob={updateJob} initRoute={initRoute} initStop={initStop} />}
+        {tab === "archive" && <ArchiveTab ro={ro} />}
         {tab === "sync"    && <SyncTab    ro={ro} jobs={jobs} places={places} vocab={vocab} addrBook={addrBook} onImport={importAll} onImportVocab={importVocab} onImportAddresses={importAddresses} onSaveVocab={saveVocab} />}
       </div>
     </div>
