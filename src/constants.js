@@ -1,4 +1,4 @@
-import { MapPin, Building2, Navigation, RotateCw } from "lucide-react";
+import { MapPin, Building2, Navigation, RotateCw, Archive } from "lucide-react";
 
 // ─── Design Tokens ───────────────────────────────────────────────────────────
 export const C = {
@@ -33,10 +33,11 @@ export const APP_VOCAB_FIELDS = [
 
 // ─── Tab Configuration ───────────────────────────────────────────────────────
 export const TABS = [
-  { id: "jobs",    label: "Jobs",   Icon: MapPin },
-  { id: "places",  label: "Places", Icon: Building2 },
-  { id: "routing", label: "Route",  Icon: Navigation },
-  { id: "sync",    label: "Sync",   Icon: RotateCw },
+  { id: "jobs",    label: "Jobs",    Icon: MapPin },
+  { id: "places",  label: "Places",  Icon: Building2 },
+  { id: "routing", label: "Route",   Icon: Navigation },
+  { id: "archive", label: "Archive", Icon: Archive },
+  { id: "sync",    label: "Sync",    Icon: RotateCw },
 ];
 
 // ─── Empty Templates ─────────────────────────────────────────────────────────
