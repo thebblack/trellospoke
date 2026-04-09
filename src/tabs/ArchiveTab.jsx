@@ -1,68 +1,42 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { Check, X, ChevronUp, ChevronDown, Search } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Check, X, ChevronUp, ChevronDown, Search, RefreshCw } from "lucide-react";
 import { C } from "../constants.js";
 import { getSbHeaders, SB_URL } from "../storage.js";
 
-export function ArchiveTab({ ro }) {
-  const [rows, setRows]       = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(null);
+export function ArchiveTab({ ro, rows, loading, error, onFetch, onUpdateRow }) {
 
-  // Filters
-  const [fYear, setFYear]       = useState("");
-  const [fMonth, setFMonth]     = useState("");
+  // Trigger fetch on first mount if not cached
+  useEffect(() => { onFetch(); }, [onFetch]);
+
+  // Filters — default to current year/month
+  const now = new Date();
+  const [fYear, setFYear]       = useState(String(now.getFullYear()));
+  const [fMonth, setFMonth]     = useState(String(now.getMonth() + 1));
   const [fCompany, setFCompany] = useState("");
   const [fSearch, setFSearch]   = useState("");
+  const [fPaid, setFPaid]       = useState(""); // "", "yes", "no"
 
   // Sort
   const [sortCol, setSortCol]   = useState("year");
   const [sortAsc, setSortAsc]   = useState(false);
-
-  // ─── Fetch ──────────────────────────────────────────────────────────────────
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const headers = getSbHeaders();
-      let all = [], offset = 0;
-      while (true) {
-        const resp = await fetch(
-          `${SB_URL}/rest/v1/jobs_archive?select=*&order=year.desc,month.desc,id.asc&limit=1000&offset=${offset}`,
-          { headers }
-        );
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const batch = await resp.json();
-        all.push(...batch);
-        if (batch.length < 1000) break;
-        offset += 1000;
-      }
-      // Deduplicate by path (pagination edge case)
-      const seen = new Set();
-      const unique = all.filter(r => { if (seen.has(r.path)) return false; seen.add(r.path); return true; });
-      setRows(unique);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  const [visibleCount, setVisibleCount] = useState(100);
 
   // ─── Filter options ─────────────────────────────────────────────────────────
-  const years     = useMemo(() => [...new Set(rows.map(r => r.year).filter(Boolean))].sort((a, b) => b - a), [rows]);
-  const months    = useMemo(() => [...new Set(rows.map(r => r.month).filter(Boolean))].sort((a, b) => a - b), [rows]);
-  const companies = useMemo(() => [...new Set(rows.map(r => r.company).filter(Boolean))].sort(), [rows]);
+  const years     = useMemo(() => [...new Set((rows || []).map(r => r.year).filter(Boolean))].sort((a, b) => b - a), [rows]);
+  const months    = useMemo(() => [...new Set((rows || []).map(r => r.month).filter(Boolean))].sort((a, b) => a - b), [rows]);
+  const companies = useMemo(() => [...new Set((rows || []).map(r => r.company).filter(Boolean))].sort(), [rows]);
 
   // ─── Filtered + sorted ─────────────────────────────────────────────────────
   const filtered = useMemo(() => {
-    let f = [...rows];
+    let f = [...(rows || [])];
     if (fYear) {
       const y = Number(fYear);
       f = f.filter(r => Number(r.year) === y);
     }
     if (fMonth)   f = f.filter(r => Number(r.month) === Number(fMonth));
     if (fCompany) f = f.filter(r => (r.company || "").toLowerCase() === fCompany.toLowerCase());
+    if (fPaid === "yes") f = f.filter(r => r.paid);
+    if (fPaid === "no")  f = f.filter(r => !r.paid);
     if (fSearch) {
       const q = fSearch.toLowerCase();
       f = f.filter(r => (r.address || "").toLowerCase().includes(q) || (r.path || "").toLowerCase().includes(q));
@@ -78,7 +52,7 @@ export function ArchiveTab({ ro }) {
       return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
     });
     return f;
-  }, [rows, fYear, fMonth, fCompany, fSearch, sortCol, sortAsc]);
+  }, [rows, fYear, fMonth, fCompany, fPaid, fSearch, sortCol, sortAsc]);
 
   // ─── Stats ──────────────────────────────────────────────────────────────────
   const stats = useMemo(() => ({
@@ -92,8 +66,9 @@ export function ArchiveTab({ ro }) {
   const toggle = async (row, field) => {
     if (ro) return;
     const newVal = row[field] ? 0 : 1;
-    // Optimistic update
-    setRows(prev => prev.map(r => r.id === row.id ? { ...r, [field]: newVal } : r));
+    const oldVal = row[field];
+    // Optimistic update via parent
+    onUpdateRow(row.id, field, newVal);
     try {
       const resp = await fetch(
         `${SB_URL}/rest/v1/jobs_archive?id=eq.${row.id}`,
@@ -106,7 +81,7 @@ export function ArchiveTab({ ro }) {
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     } catch {
       // Revert on failure
-      setRows(prev => prev.map(r => r.id === row.id ? { ...r, [field]: row[field] } : r));
+      onUpdateRow(row.id, field, oldVal);
     }
   };
 
@@ -137,7 +112,7 @@ export function ArchiveTab({ ro }) {
     padding: "6px 8px", color: C.text, fontSize: 12, outline: "none",
   };
 
-  if (loading) {
+  if (loading || rows === null) {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: 40 }}>
         <div style={{ width: 32, height: 32, border: `3px solid ${C.border}`, borderTopColor: C.accent, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
@@ -159,9 +134,15 @@ export function ArchiveTab({ ro }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* Header */}
-      <div>
-        <div style={{ color: C.text, fontWeight: 800, fontSize: 20 }}>Archive</div>
-        <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{rows.length} jobs · tap invoice/paid to toggle</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ color: C.text, fontWeight: 800, fontSize: 20 }}>Archive</div>
+          <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{rows.length} jobs · tap invoice/paid to toggle</div>
+        </div>
+        <button onClick={() => onFetch(true)} title="Refresh from server"
+          style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 8px", cursor: "pointer", color: C.muted, display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}>
+          <RefreshCw size={12} /> Refresh
+        </button>
       </div>
 
       {/* Stats */}
@@ -181,28 +162,33 @@ export function ArchiveTab({ ro }) {
 
       {/* Filters */}
       <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "10px 12px", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-        <select value={fYear} onChange={e => setFYear(e.target.value)} style={selectStyle}>
+        <select value={fYear} onChange={e => { setFYear(e.target.value); setVisibleCount(100); }} style={selectStyle}>
           <option value="">Year</option>
           {years.map(y => <option key={y} value={y}>{y}</option>)}
         </select>
-        <select value={fMonth} onChange={e => setFMonth(e.target.value)} style={selectStyle}>
+        <select value={fMonth} onChange={e => { setFMonth(e.target.value); setVisibleCount(100); }} style={selectStyle}>
           <option value="">Month</option>
           {months.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
-        <select value={fCompany} onChange={e => setFCompany(e.target.value)} style={selectStyle}>
+        <select value={fCompany} onChange={e => { setFCompany(e.target.value); setVisibleCount(100); }} style={selectStyle}>
           <option value="">Company</option>
           {companies.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={fPaid} onChange={e => { setFPaid(e.target.value); setVisibleCount(100); }} style={selectStyle}>
+          <option value="">Paid?</option>
+          <option value="yes">Paid</option>
+          <option value="no">Unpaid</option>
         </select>
         <div style={{ flex: 1, minWidth: 100, position: "relative" }}>
           <Search size={12} style={{ position: "absolute", left: 8, top: 9, color: C.muted }} />
           <input
-            type="text" value={fSearch} onChange={e => setFSearch(e.target.value)}
+            type="text" value={fSearch} onChange={e => { setFSearch(e.target.value); setVisibleCount(100); }}
             placeholder="Search address…"
             style={{ ...selectStyle, width: "100%", boxSizing: "border-box", paddingLeft: 24 }}
           />
         </div>
-        {(fYear || fMonth || fCompany || fSearch) && (
-          <button onClick={() => { setFYear(""); setFMonth(""); setFCompany(""); setFSearch(""); }}
+        {(fYear || fMonth || fCompany || fPaid || fSearch) && (
+          <button onClick={() => { setFYear(""); setFMonth(""); setFCompany(""); setFPaid(""); setFSearch(""); setVisibleCount(100); }}
             style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 11, fontWeight: 700, padding: "4px 8px" }}>
             <X size={12} /> Clear
           </button>
@@ -214,12 +200,12 @@ export function ArchiveTab({ ro }) {
         {/* Header row */}
         <div style={{ display: "grid", gridTemplateColumns: "52px 32px 1fr 90px 44px 44px", gap: 0, borderBottom: `1px solid ${C.border}`, padding: "8px 12px" }}>
           {[
-            { col: "year", label: "Year", w: "52px" },
-            { col: "month", label: "Mo", w: "32px" },
-            { col: "address", label: "Address", w: "1fr" },
-            { col: "company", label: "Company", w: "90px" },
-            { col: "invoice", label: "Inv", w: "44px" },
-            { col: "paid", label: "Paid", w: "44px" },
+            { col: "year", label: "Year" },
+            { col: "month", label: "Mo" },
+            { col: "address", label: "Address" },
+            { col: "company", label: "Company" },
+            { col: "invoice", label: "Inv" },
+            { col: "paid", label: "Paid" },
           ].map(({ col, label }) => (
             <button key={col} onClick={() => onSort(col)} style={{
               background: "none", border: "none", color: sortCol === col ? C.accent : C.muted,
@@ -237,7 +223,7 @@ export function ArchiveTab({ ro }) {
           {filtered.length === 0 && (
             <div style={{ padding: 20, textAlign: "center", color: C.muted, fontSize: 13 }}>No records match filters</div>
           )}
-          {filtered.map((row, idx) => (
+          {filtered.slice(0, visibleCount).map((row, idx) => (
             <div key={row.path || idx} style={{
               display: "grid", gridTemplateColumns: "52px 32px 1fr 90px 44px 44px",
               gap: 0, padding: "7px 12px", borderBottom: `1px solid ${C.border}11`,
@@ -255,6 +241,12 @@ export function ArchiveTab({ ro }) {
               </span>
             </div>
           ))}
+          {filtered.length > visibleCount && (
+            <button onClick={() => setVisibleCount(v => v + 100)}
+              style={{ width: "100%", padding: "10px", background: "none", border: "none", color: C.accent, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+              Show more ({filtered.length - visibleCount} remaining)
+            </button>
+          )}
         </div>
       </div>
     </div>
