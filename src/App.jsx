@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { MapPin } from "lucide-react";
 import { C, TABS } from "./constants.js";
-import { storeLoad, storeSave, signIn, signOut, isSignedIn, getAccessMode } from "./storage.js";
+import { storeLoad, storeSave, signIn, signOut, isSignedIn, getAccessMode, getSbHeaders, SB_URL } from "./storage.js";
 import { mergeVocab, mergeAddress } from "./utils.js";
 import { Btn } from "./components/ui.jsx";
 import { JobsTab } from "./tabs/JobsTab.jsx";
@@ -25,6 +25,11 @@ export default function App() {
   const [password,  setPassword]  = useState("");
   const [authError, setAuthError] = useState("");
   const [authBusy,  setAuthBusy]  = useState(false);
+
+  // ═══ ARCHIVE CACHE ═══
+  const [archiveRows, setArchiveRows]       = useState(null);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [archiveError, setArchiveError]     = useState(null);
 
   // ═══ ALL EFFECTS — MUST BE BEFORE ANY RETURN ═══
   useEffect(() => {
@@ -51,6 +56,39 @@ export default function App() {
   useEffect(() => { if (loaded) storeSave("srp6-places", places);   }, [places,   loaded]);
   useEffect(() => { if (loaded) storeSave("srp6-vocab",  vocab);    }, [vocab,    loaded]);
   useEffect(() => { if (loaded) storeSave("srp6-addr",   addrBook); }, [addrBook, loaded]);
+
+  // ═══ ARCHIVE FETCH — once per session, or on manual refresh ═══
+  const fetchArchive = useCallback(async (force = false) => {
+    if (archiveRows && !force) return;
+    setArchiveLoading(true);
+    setArchiveError(null);
+    try {
+      const headers = getSbHeaders();
+      let all = [], offset = 0;
+      while (true) {
+        const resp = await fetch(
+          `${SB_URL}/rest/v1/jobs_archive?select=*&order=year.desc,month.desc,id.asc&limit=1000&offset=${offset}`,
+          { headers }
+        );
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const batch = await resp.json();
+        all.push(...batch);
+        if (batch.length < 1000) break;
+        offset += 1000;
+      }
+      const seen = new Set();
+      const unique = all.filter(r => { if (seen.has(r.path)) return false; seen.add(r.path); return true; });
+      setArchiveRows(unique);
+    } catch (e) {
+      setArchiveError(e.message);
+    } finally {
+      setArchiveLoading(false);
+    }
+  }, [archiveRows]);
+
+  const updateArchiveRow = useCallback((id, field, value) => {
+    setArchiveRows(prev => prev?.map(r => r.id === id ? { ...r, [field]: value } : r) ?? null);
+  }, []);
 
   // ═══ ALL CALLBACKS — MUST BE BEFORE ANY RETURN ═══
   const addJob = useCallback(job => {
@@ -116,6 +154,7 @@ export default function App() {
     setEmail("");
     setPassword("");
     setLoaded(false);
+    setArchiveRows(null);
   };
 
   const ro = access === "ro";
@@ -189,7 +228,7 @@ export default function App() {
               <MapPin size={15} color="#fff" />
             </div>
             <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: "-0.01em" }}>Survey Route Planner</span>
-            <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>v35</span>
+            <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>v36</span>
             <span onClick={handleSignOut} style={{ fontSize: 10, color: ro ? C.accent : C.green, fontWeight: 700, cursor: "pointer", padding: "2px 7px", border: `1px solid ${ro ? C.accent : C.green}44`, borderRadius: 6 }}>
               {ro ? "🔒 RO" : "✏️ RW"}
             </span>
@@ -213,7 +252,7 @@ export default function App() {
         {tab === "jobs"    && <JobsTab    ro={ro} jobs={jobs} vocab={vocab} addrBook={addrBook} onAdd={addJob} onUpdate={updateJob} onDelete={deleteJob} />}
         {tab === "places"  && <PlacesTab  ro={ro} places={places} onAdd={addPlace} onUpdate={updatePlace} onDelete={deletePlace} />}
         {tab === "routing" && <RoutingTab ro={ro} jobs={jobs} places={places} vocab={vocab} addrBook={addrBook} onUpdateJob={updateJob} initRoute={initRoute} initStop={initStop} />}
-        {tab === "archive" && <ArchiveTab ro={ro} />}
+        {tab === "archive" && <ArchiveTab ro={ro} rows={archiveRows} loading={archiveLoading} error={archiveError} onFetch={fetchArchive} onUpdateRow={updateArchiveRow} />}
         {tab === "sync"    && <SyncTab    ro={ro} jobs={jobs} places={places} vocab={vocab} addrBook={addrBook} onImport={importAll} onImportVocab={importVocab} onImportAddresses={importAddresses} onSaveVocab={saveVocab} />}
       </div>
     </div>
