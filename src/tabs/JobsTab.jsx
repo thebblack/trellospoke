@@ -37,8 +37,16 @@ function JobModal({ job, vocab, addrBook, onSave, onClose }) {
     setF(p => ({ ...p, name: entry.name, coords: { lat: entry.coords.lat, lng: entry.coords.lng } }));
   };
 
+  const handleBackdropClick = () => {
+    const hasData = f.street.trim() || f.city.trim() || f.company.trim() || f.surveyType.trim();
+    if (hasData) {
+      if (!window.confirm("Discard changes?")) return;
+    }
+    onClose();
+  };
+
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 50, display: "flex", alignItems: "flex-end", justifyContent: "center", padding: 12 }}>
+    <div onClick={handleBackdropClick} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 50, display: "flex", alignItems: "flex-end", justifyContent: "center", padding: 12 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 20, width: "100%", maxWidth: 500, maxHeight: "92vh", overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ color: C.text, fontWeight: 800, fontSize: 16 }}>{job ? "Edit Job" : "New Job"}</span>
