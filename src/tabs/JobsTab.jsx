@@ -4,6 +4,7 @@ import { C, COMPLETION_FIELDS, EMPTY_JOB } from "../constants.js";
 import { genId, coordLookup, coordSave } from "../utils.js";
 import { Btn, Pill, Checkbox, Section, Grid2 } from "../components/ui.jsx";
 import { InputField, AutoField, CoordField } from "../components/fields.jsx";
+import { NavModal } from "../components/NavModal.jsx";
 
 // ─── Job Modal ───────────────────────────────────────────────────────────────
 function JobModal({ job, vocab, addrBook, onSave, onClose }) {
@@ -138,6 +139,7 @@ function JobCard({ ro, job, onEdit, onDelete, onAdvance }) {
   const [open, setOpen] = useState(false);
   const [swipeX, setSwipeX] = useState(0);
   const [swiping, setSwiping] = useState(false);
+  const [navModal, setNavModal] = useState(false);
   const touchStartX = useRef(null);
   const THRESHOLD = 80;
 
@@ -198,10 +200,10 @@ function JobCard({ ro, job, onEdit, onDelete, onAdvance }) {
             </button>
           )}
           {hasCoords && (
-            <a href={`https://www.google.com/maps/search/?api=1&query=${job.coords.lat},${job.coords.lng}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-              style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 8, padding: "5px 10px", color: C.text, fontWeight: 700, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap", textDecoration: "none" }}>
+            <button onClick={e => { e.stopPropagation(); setNavModal(true); }}
+              style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 8, padding: "5px 10px", color: C.text, fontWeight: 700, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}>
               📍 Maps
-            </a>
+            </button>
           )}
           {open ? <ChevronUp size={15} color={C.muted} /> : <ChevronDown size={15} color={C.muted} />}
         </div>
@@ -240,7 +242,7 @@ function JobCard({ ro, job, onEdit, onDelete, onAdvance }) {
               );
             })}
           </div>
-          {hasCoords && <a href={`https://www.google.com/maps/search/?api=1&query=${job.coords.lat},${job.coords.lng}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 11, color: C.muted, fontFamily: "monospace", textDecoration: "none" }}>📍 {job.coords.lat}, {job.coords.lng}</a>}
+          {hasCoords && <button onClick={e => { e.stopPropagation(); setNavModal(true); }} style={{ fontSize: 11, color: C.muted, fontFamily: "monospace", background: "none", border: "none", padding: 0, cursor: "pointer" }}>📍 {job.coords.lat}, {job.coords.lng}</button>}
           {!ro && <div style={{ display: "flex", gap: 8 }}>
             <Btn onClick={() => onEdit(job)} variant="secondary" small><Edit2 size={12} /> Edit</Btn>
             <Btn onClick={() => onDelete(job.id)} variant="danger" small><Trash2 size={12} /> Delete</Btn>
@@ -248,6 +250,7 @@ function JobCard({ ro, job, onEdit, onDelete, onAdvance }) {
         </div>
       )}
       </div>
+      {navModal && <NavModal item={job} onClose={() => setNavModal(false)} />}
     </div>
   );
 }
