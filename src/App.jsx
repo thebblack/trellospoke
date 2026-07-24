@@ -104,6 +104,7 @@ export default function App() {
   }, []);
 
   const deleteJob   = useCallback(id => setJobs(p => p.filter(j => j.id !== id)), []);
+  const reorderJobs = useCallback(newJobs => setJobs(newJobs), []);
   const addPlace    = useCallback(pl => setPlaces(p => [...p, pl]), []);
   const updatePlace = useCallback((id, u) => setPlaces(p => p.map(pl => pl.id === id ? { ...pl, ...u } : pl)), []);
   const deletePlace = useCallback(id => setPlaces(p => p.filter(pl => pl.id !== id)), []);
@@ -249,7 +250,7 @@ export default function App() {
       </div>
 
       <div style={{ maxWidth: 540, margin: "0 auto", padding: "16px 16px 70px" }}>
-        {tab === "jobs"    && <JobsTab    ro={ro} jobs={jobs} vocab={vocab} addrBook={addrBook} onAdd={addJob} onUpdate={updateJob} onDelete={deleteJob} />}
+        {tab === "jobs"    && <JobsTab    ro={ro} jobs={jobs} vocab={vocab} addrBook={addrBook} onAdd={addJob} onUpdate={updateJob} onDelete={deleteJob} onReorder={reorderJobs} />}
         {tab === "places"  && <PlacesTab  ro={ro} places={places} onAdd={addPlace} onUpdate={updatePlace} onDelete={deletePlace} />}
         {tab === "routing" && <RoutingTab ro={ro} jobs={jobs} places={places} vocab={vocab} addrBook={addrBook} onUpdateJob={updateJob} initRoute={initRoute} initStop={initStop} />}
         {tab === "archive" && <ArchiveTab ro={ro} rows={archiveRows} loading={archiveLoading} error={archiveError} onFetch={fetchArchive} onUpdateRow={updateArchiveRow} />}
