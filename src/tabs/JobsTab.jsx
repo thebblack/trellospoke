@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { MapPin, Plus, X, Edit2, Trash2, ChevronDown, ChevronUp, Check } from "lucide-react";
+import { MapPin, Plus, X, Edit2, Trash2, ChevronDown, ChevronUp, Check, ArrowUp, ArrowDown } from "lucide-react";
 import { C, COMPLETION_FIELDS, EMPTY_JOB } from "../constants.js";
 import { genId, coordLookup, coordSave } from "../utils.js";
 import { Btn, Pill, Checkbox, Section, Grid2 } from "../components/ui.jsx";
@@ -135,7 +135,7 @@ function JobModal({ job, vocab, addrBook, onSave, onClose }) {
 }
 
 // ─── Job Card ────────────────────────────────────────────────────────────────
-function JobCard({ ro, job, onEdit, onDelete, onAdvance }) {
+function JobCard({ ro, job, onEdit, onDelete, onAdvance, orderable, isFirst, isLast, onMove }) {
   const [open, setOpen] = useState(false);
   const [swipeX, setSwipeX] = useState(0);
   const [swiping, setSwiping] = useState(false);
@@ -182,6 +182,18 @@ function JobCard({ ro, job, onEdit, onDelete, onAdvance }) {
         onTouchEnd={ro ? undefined : onTouchEnd}
         style={{ transform: `translateX(${swipeX}px)`, transition: swiping ? "none" : "transform .2s", background: C.surface, border: `1px solid ${allDone ? C.green + "44" : C.border}`, borderRadius: 14, overflow: "hidden" }}>
         <div onClick={() => setOpen(o => !o)} style={{ padding: "12px 14px", display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
+        {orderable && !ro && (
+          <div onClick={e => e.stopPropagation()} style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0, marginTop: 1 }}>
+            <button onClick={() => onMove(job.id, -1)} disabled={isFirst}
+              style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 5, padding: 2, color: isFirst ? C.border : C.muted, cursor: isFirst ? "default" : "pointer", display: "flex" }}>
+              <ArrowUp size={11} />
+            </button>
+            <button onClick={() => onMove(job.id, 1)} disabled={isLast}
+              style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 5, padding: 2, color: isLast ? C.border : C.muted, cursor: isLast ? "default" : "pointer", display: "flex" }}>
+              <ArrowDown size={11} />
+            </button>
+          </div>
+        )}
         <MapPin size={14} color={C.accent} style={{ marginTop: 3, flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>{job.name}</div>
@@ -255,8 +267,16 @@ function JobCard({ ro, job, onEdit, onDelete, onAdvance }) {
   );
 }
 
+// Re-order the subset of `jobsArr` matched by `filterFn` to match `orderedIds`,
+// leaving every other job's position untouched.
+function reorderWithinFilter(jobsArr, filterFn, orderedIds) {
+  const byId = Object.fromEntries(jobsArr.map(j => [j.id, j]));
+  let i = 0;
+  return jobsArr.map(j => (filterFn(j) ? byId[orderedIds[i++]] : j));
+}
+
 // ─── Jobs Tab ────────────────────────────────────────────────────────────────
-export function JobsTab({ ro, jobs, vocab, addrBook, onAdd, onUpdate, onDelete }) {
+export function JobsTab({ ro, jobs, vocab, addrBook, onAdd, onUpdate, onDelete, onReorder }) {
   const [modal,     setModal]     = useState(null);
   const [statusTab, setStatusTab] = useState("new");
 
@@ -276,6 +296,16 @@ export function JobsTab({ ro, jobs, vocab, addrBook, onAdd, onUpdate, onDelete }
 
   const activeFilter = STATUS_TABS.find(t => t.id === statusTab)?.filter ?? (() => true);
   const filtered = jobs.filter(activeFilter);
+  const orderable = statusTab === "new";
+
+  const moveJob = (id, dir) => {
+    const ids = filtered.map(j => j.id);
+    const idx = ids.indexOf(id);
+    const swapIdx = idx + dir;
+    if (swapIdx < 0 || swapIdx >= ids.length) return;
+    [ids[idx], ids[swapIdx]] = [ids[swapIdx], ids[idx]];
+    onReorder(reorderWithinFilter(jobs, activeFilter, ids));
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -317,7 +347,15 @@ export function JobsTab({ ro, jobs, vocab, addrBook, onAdd, onUpdate, onDelete }
         </div>
       )}
 
-      {filtered.map(job => <JobCard key={job.id} ro={ro} job={job} onEdit={j => setModal(j)} onDelete={onDelete} onAdvance={advance} />)}
+      {filtered.map((job, i) => (
+        <div key={job.id} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <div style={{ width: 18, flexShrink: 0, textAlign: "right", color: C.muted, fontSize: 11, fontWeight: 700, marginTop: 15 }}>{i + 1}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <JobCard ro={ro} job={job} onEdit={j => setModal(j)} onDelete={onDelete} onAdvance={advance}
+              orderable={orderable} isFirst={i === 0} isLast={i === filtered.length - 1} onMove={moveJob} />
+          </div>
+        </div>
+      ))}
 
       {modal && (
         <JobModal
